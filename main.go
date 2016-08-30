@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/garyburd/go-oauth/oauth"
+    "github.com/garyburd/go-oauth/oauth"
     "github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
 
@@ -18,19 +18,14 @@ const (
 	authorizationURL = "https://api.twitter.com/oauth/authenticate"
 	accessTokenURL   = "https://api.twitter.com/oauth/access_token"
 	accountURL       = "https://api.twitter.com/1.1/account/verify_credentials.json"
-
-	callbackURL = "http://localhost:8080/login/callback"
 )
 
 var (
 	twitterKey    string
 	twitterSecret string
+    domain int
+    callbackURL string
 )
-
-//  func init() {
-//      twitterKey = os.Getenv("TEST_KEY")
-//      twitterSecret = os.Getenv("TEST_SECRET")
-//  }
 
 func NewTWClient() *oauth.Client {
 	oc := &oauth.Client{
@@ -124,9 +119,8 @@ func TwitterCallback(c *gin.Context) {
     fmt.Println(account)
     fmt.Println(at)
 
-    c.Redirect(http.StatusMovedPermanently, "http://localhost:8080/")
+    c.Redirect(http.StatusMovedPermanently, "/")
 
-//      c.JSON(http.StatusOK, nil)
     return
 }
 
@@ -171,61 +165,95 @@ func GetMe(at *oauth.Credentials, user interface{}) (int, error) {
 
 func main() {
 
-	twitterKey = os.Getenv("TEST_KEY")
-	twitterSecret = os.Getenv("TEST_SECRET")
+    twitterKey = os.Getenv("TEST_KEY")
+    twitterSecret = os.Getenv("TEST_SECRET")
 
     if (twitterKey == "")  || (twitterSecret == "") {
         panic("you should set TEST_KEY and TEST_SECRET")
     }
 
-    r := gin.New()
+    domain := os.Getenv("DOMAIN")
+    if domain == "" {
+        panic("you should set DOMAIN env varibale")
+    }
+
+    port := os.Getenv("PORT")
+    if port == "" {
+        panic("you should set PORT env variable")
+    }
+
+    url := "http://" + domain + ":" + port + "/"
+    callbackURL = url + "login/callback"
+
+    router := gin.New()
+    //      router := gin.Default()
+
+    //      router.LoadHTMLTemplates("templates/*")
+//      router.LoadHTMLFiles("templates/index_to_login.tmpl")
+//      router.LoadHTMLFiles("templates/main.tmpl")
+    router.LoadHTMLGlob("templates/*")
 
     store := sessions.NewCookieStore([]byte("secret"))
-    r.Use(sessions.Sessions("mysession", store))
+    router.Use(sessions.Sessions("mysession", store))
 
-	r.Use(gin.Logger())
-	r.Use(gin.Recovery())
+    router.Use(gin.Logger())
+    router.Use(gin.Recovery())
 
-    r.GET("/", func(c *gin.Context) {
-        session := sessions.Default(c)
+    //      router.GET("/", func(c *gin.Context) {
+    //          session := sessions.Default(c)
 
-        co := session.Get("counter")
+    //          co := session.Get("counter")
 
-        var counter int
-        if co == nil {
-            counter = 1
-        }else {
-            counter = co.(int)
-        }
+    //          var counter int
+    //          if co == nil {
+    //              counter = 1
+    //          }else {
+    //              counter = co.(int)
+    //          }
 
-        uid_t := session.Get("user_id")
-        var userId string
-        if uid_t == nil {
-            userId = "null"
-        }else {
-            userId = uid_t.(string)
-        }
+    //          uid_t := session.Get("user_id")
+    //          var userId string
+    //          if uid_t == nil {
+    //              userId = "null"
+    //          }else {
+    //              userId = uid_t.(string)
+    //          }
 
-        result := struct {
-            Count int
-            UserId string
-        }{Count: counter, UserId: userId}
+    //          result := struct {
+    //              Count int
+    //              UserId string
+    //          }{Count: counter, UserId: userId}
 
-        fmt.Println(counter)
-        session.Set("counter", counter + 1)
-        session.Save()
-        c.JSON(http.StatusOK, result)
-    })
+    //          fmt.Println(counter)
+    //          session.Set("counter", counter + 1)
+    //          session.Save()
+    //          c.JSON(http.StatusOK, result)
+    //      })
 
-    r.GET("/login", LoginByTwitter)
-    r.GET("/login/callback", TwitterCallback)
-    r.GET("/logout", func(c *gin.Context){
+    router.GET("/login", LoginByTwitter)
+    router.GET("/login/callback", TwitterCallback)
+
+    router.GET("/logout", func(c *gin.Context) {
         session := sessions.Default(c)
         session.Clear()
         session.Save()
-        c.Redirect(http.StatusMovedPermanently, "http://localhost:8080/")
+        c.Redirect(http.StatusMovedPermanently, "/")
     })
 
-    r.Run()
+    router.GET("/", func(c *gin.Context) {
+        session := sessions.Default(c)
+        user_id := session.Get("user_id")
+        if user_id == nil {
+            //TODO show page that have button 
+            c.HTML(http.StatusOK, "index_to_login.tmpl", nil)
+            return
+        }
+
+        // pass authorized
+        //TODO
+        c.HTML(http.StatusOK, "main.tmpl", nil)
+    })
+
+    router.Run()
 }
 
