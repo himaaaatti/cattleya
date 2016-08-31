@@ -7,42 +7,33 @@ import (
 
 	"github.com/pkg/errors"
 
+    "./twitter"
+
 	"os"
 	"net/http"
     "encoding/json"
     "fmt"
+
+    "database/sql"
+    _ "github.com/mattn/go-sqlite3"
+
 )
 
-const (
-	refreshTokenURL  = "https://api.twitter.com/oauth/request_token"
-	authorizationURL = "https://api.twitter.com/oauth/authenticate"
-	accessTokenURL   = "https://api.twitter.com/oauth/access_token"
-	accountURL       = "https://api.twitter.com/1.1/account/verify_credentials.json"
-)
+//  const (
+//      refreshTokenURL  = "https://api.twitter.com/oauth/request_token"
+//      authorizationURL = "https://api.twitter.com/oauth/authenticate"
+//      accessTokenURL   = "https://api.twitter.com/oauth/access_token"
+//      accountURL       = "https://api.twitter.com/1.1/account/verify_credentials.json"
+//  )
 
 var (
-	twitterKey    string
-	twitterSecret string
-    domain int
     callbackURL string
+    twitterOauth *twitter.Twitter
+    db *sql.DB
 )
 
-func NewTWClient() *oauth.Client {
-	oc := &oauth.Client{
-		TemporaryCredentialRequestURI: refreshTokenURL,
-		ResourceOwnerAuthorizationURI: authorizationURL,
-		TokenRequestURI:               accessTokenURL,
-		Credentials: oauth.Credentials{
-			Token:  twitterKey,
-			Secret: twitterSecret,
-		},
-	}
-
-	return oc
-}
-
 func LoginByTwitter(c *gin.Context) {
-    oc := NewTWClient()
+    oc := twitterOauth.NewOauthClient()
 
     rt, err := oc.RequestTemporaryCredentials(nil, callbackURL, nil)
 	if err != nil {
@@ -113,7 +104,30 @@ func TwitterCallback(c *gin.Context) {
         c.JSON(code, nil)
         return
     }
+//      session.Set("user_id", account.ID)
+//      session.Save()
+
+    row := db.QueryRow(`SELECT count(1) FROM user WHERE user_id = ?`, account.ID)
+    var count int
+    err = row.Scan(&count)
+    if err != nil {
+        panic(err)
+    }
+
+    if count == 0 {
+        _, err = db.Exec(
+            `INSERT INTO user(user_id, token, secret ,name) VALUES (?, ?, ?, ?)`,
+            account.ID, at.Token, at.Secret, account.ScreenName)
+        if err != nil {
+            panic(err)
+        }
+    }
+//      else {
+//          _, err = db.Exec(`SELECT text FROM user WHERE user_id = ?`, account.ID)
+//      }
+
     session.Set("user_id", account.ID)
+    session.Set("name", account.ScreenName)
     session.Save()
 
     fmt.Println(account)
@@ -125,7 +139,7 @@ func TwitterCallback(c *gin.Context) {
 }
 
 func GetAccessToken(rt *oauth.Credentials, oauthVerifier string) (int, *oauth.Credentials, error) {
-	oc := NewTWClient()
+	oc := twitterOauth.NewOauthClient()
 	at, _, err := oc.RequestToken(nil, rt, oauthVerifier)
 	if err != nil {
 		err := errors.Wrap(err, "Failed to get access token.")
@@ -136,7 +150,8 @@ func GetAccessToken(rt *oauth.Credentials, oauthVerifier string) (int, *oauth.Cr
 }
 
 func GetMe(at *oauth.Credentials, user interface{}) (int, error) {
-	oc := NewTWClient()
+    accountURL  := "https://api.twitter.com/1.1/account/verify_credentials.json"
+	oc := twitterOauth.NewOauthClient()
 	resp, err := oc.Get(nil, at, accountURL, nil)
 	if err != nil {
 		err = errors.Wrap(err, "Failed to send twitter request.")
@@ -165,10 +180,10 @@ func GetMe(at *oauth.Credentials, user interface{}) (int, error) {
 
 func main() {
 
-    twitterKey = os.Getenv("TEST_KEY")
-    twitterSecret = os.Getenv("TEST_SECRET")
+    key := os.Getenv("TEST_KEY")
+    secret := os.Getenv("TEST_SECRET")
 
-    if (twitterKey == "")  || (twitterSecret == "") {
+    if (key == "")  || (secret == "") {
         panic("you should set TEST_KEY and TEST_SECRET")
     }
 
@@ -185,12 +200,21 @@ func main() {
     url := "http://" + domain + ":" + port + "/"
     callbackURL = url + "login/callback"
 
+    // for db
+    var err error
+    db, err = sql.Open("sqlite3", "sample.db")
+    if err != nil {
+        panic(err)
+    }
+
+
+
+    // for twitter oauth
+    twitterOauth = &twitter.Twitter{key, secret}
+
     router := gin.New()
     //      router := gin.Default()
 
-    //      router.LoadHTMLTemplates("templates/*")
-//      router.LoadHTMLFiles("templates/index_to_login.tmpl")
-//      router.LoadHTMLFiles("templates/main.tmpl")
     router.LoadHTMLGlob("templates/*")
 
     store := sessions.NewCookieStore([]byte("secret"))
@@ -251,7 +275,7 @@ func main() {
 
         // pass authorized
         //TODO
-        c.HTML(http.StatusOK, "main.tmpl", nil)
+        c.HTML(http.StatusOK, "main.tmpl", gin.H{"name": session.Get("name")})
     })
 
     router.Run()
