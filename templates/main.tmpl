@@ -2,6 +2,22 @@
 <html>
     <head>
         <title>Cattleya</title>
+    <link rel='stylesheet' href='http://cdnjs.cloudflare.com/ajax/libs/fullcalendar/2.9.1/fullcalendar.min.css' rel='stylesheet'/>
+    <link rel='stylesheet' href='http://cdnjs.cloudflare.com/ajax/libs/fullcalendar/2.9.1/fullcalendar.print.css' rel='stylesheet' media='print'/>
+    <script src='https://code.jquery.com/jquery-3.1.0.min.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.14.1/moment.min.js'></script>
+    <script src='http://cdnjs.cloudflare.com/ajax/libs/fullcalendar/2.9.1/fullcalendar.min.js
+    '></script>
+
+        <script>
+        $(document).ready(function() {
+            $('#calendar').fullCalendar({
+
+            })
+        });
+        </script>
+
+    
     </head>
     <body>
         <a>{{ .name }}</a>
@@ -9,6 +25,8 @@
         <br>
 
         <a href="/input"> Input </a>
+
+        <div id='calendar'></div>
 
     </body>
 </html>
