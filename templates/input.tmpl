@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Cattleya</title>
+    </head>
+    <body>
+        <a>{{ .name }}</a>
+        <a href="/logout">logout</a>
+        <br>
+        <form action="/input", method="post">
+            <p> value <p>
+            <input type="text" name="value"/>
+            <input type="submit" value="submit"/> 
+        </form>
+
+        <ul>
+            {{range .expenses}}
+                <p>{{.Value}} : {{.Date}}</p>
+            {{end}}
+        </ul>
+
+    </body>
+</html>

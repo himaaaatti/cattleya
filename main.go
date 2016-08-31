@@ -19,18 +19,17 @@ import (
 
 )
 
-//  const (
-//      refreshTokenURL  = "https://api.twitter.com/oauth/request_token"
-//      authorizationURL = "https://api.twitter.com/oauth/authenticate"
-//      accessTokenURL   = "https://api.twitter.com/oauth/access_token"
-//      accountURL       = "https://api.twitter.com/1.1/account/verify_credentials.json"
-//  )
-
 var (
     callbackURL string
     twitterOauth *twitter.Twitter
     db *sql.DB
 )
+
+type Expense struct {
+    ID int `id`
+    Value int `value`
+    Date int `date`
+}
 
 func LoginByTwitter(c *gin.Context) {
     oc := twitterOauth.NewOauthClient()
@@ -104,10 +103,8 @@ func TwitterCallback(c *gin.Context) {
         c.JSON(code, nil)
         return
     }
-//      session.Set("user_id", account.ID)
-//      session.Save()
 
-    row := db.QueryRow(`SELECT count(1) FROM user WHERE user_id = ?`, account.ID)
+    row := db.QueryRow(`SELECT count(1) FROM users WHERE id = ?`, account.ID)
     var count int
     err = row.Scan(&count)
     if err != nil {
@@ -116,14 +113,15 @@ func TwitterCallback(c *gin.Context) {
 
     if count == 0 {
         _, err = db.Exec(
-            `INSERT INTO user(user_id, token, secret ,name) VALUES (?, ?, ?, ?)`,
+            `INSERT INTO users (id , token, secret ,name) VALUES (?, ?, ?, ?)`,
             account.ID, at.Token, at.Secret, account.ScreenName)
         if err != nil {
             panic(err)
         }
     }
+    //TODO
 //      else {
-//          _, err = db.Exec(`SELECT text FROM user WHERE user_id = ?`, account.ID)
+//          _, err = db.Exec(`SELECT text FROM users WHERE id = ?`, account.ID)
 //      }
 
     session.Set("user_id", account.ID)
@@ -169,6 +167,7 @@ func GetMe(at *oauth.Credentials, user interface{}) (int, error) {
 		return http.StatusBadRequest, err
 	}
 
+//      fmt.Println(resp.Body)
 	err = json.NewDecoder(resp.Body).Decode(user)
 	if err != nil {
 		err = errors.Wrap(err, "Failed to decode user account response.")
@@ -207,8 +206,6 @@ func main() {
         panic(err)
     }
 
-
-
     // for twitter oauth
     twitterOauth = &twitter.Twitter{key, secret}
 
@@ -222,37 +219,6 @@ func main() {
 
     router.Use(gin.Logger())
     router.Use(gin.Recovery())
-
-    //      router.GET("/", func(c *gin.Context) {
-    //          session := sessions.Default(c)
-
-    //          co := session.Get("counter")
-
-    //          var counter int
-    //          if co == nil {
-    //              counter = 1
-    //          }else {
-    //              counter = co.(int)
-    //          }
-
-    //          uid_t := session.Get("user_id")
-    //          var userId string
-    //          if uid_t == nil {
-    //              userId = "null"
-    //          }else {
-    //              userId = uid_t.(string)
-    //          }
-
-    //          result := struct {
-    //              Count int
-    //              UserId string
-    //          }{Count: counter, UserId: userId}
-
-    //          fmt.Println(counter)
-    //          session.Set("counter", counter + 1)
-    //          session.Save()
-    //          c.JSON(http.StatusOK, result)
-    //      })
 
     router.GET("/login", LoginByTwitter)
     router.GET("/login/callback", TwitterCallback)
@@ -276,6 +242,60 @@ func main() {
         // pass authorized
         //TODO
         c.HTML(http.StatusOK, "main.tmpl", gin.H{"name": session.Get("name")})
+    })
+
+    router.GET("/input", func(c *gin.Context) {
+        session := sessions.Default(c)
+        user_id := session.Get("user_id")
+        name := session.Get("name")
+        if name == "" {
+            c.Redirect(http.StatusMovedPermanently, "/")
+            return
+        }
+
+        rows, err := db.Query(
+            `SELECT id, value, date from expenses WHERE user_id = ? LIMIT 10`,
+            user_id)
+        if err != nil {
+            panic(err)
+        }
+
+        expenses := make([]Expense, 0, 10)
+        for rows.Next() {
+            ex := Expense{}
+            err = rows.Scan(&ex.ID, &ex.Value, &ex.Date)
+            if err != nil {
+                panic(err)
+            }
+            expenses = append(expenses, ex)
+        }
+
+        rows.Close()
+
+        c.HTML(http.StatusOK, "input.tmpl",
+            gin.H{"name": name, "expenses": expenses})
+    })
+
+    router.POST("/input", func(c *gin.Context) {
+        session := sessions.Default(c)
+        name := session.Get("name")
+        user_id := session.Get("user_id")
+        if name == "" {
+            c.Redirect(http.StatusMovedPermanently, "/")
+            return
+        }
+
+        value := c.PostForm("value")
+        //TODO now 以外
+        _, err := db.Exec(
+            `INSERT INTO expenses (user_id, value, date) VALUES (?, ?, strftime('%s', 'now'))`,
+            user_id, value)
+
+        if err != nil {
+            panic(err)
+        }
+
+        c.Redirect(http.StatusMovedPermanently, "/input")
     })
 
     router.Run()
