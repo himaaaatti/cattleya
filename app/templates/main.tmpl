@@ -19,18 +19,15 @@
                 },
 
                 events: [
-                    {{range .expenses}}
+                    {{range .journal}}
                         {
-                            title: '¥' + '{{.Value}}',
+                            title: '¥' + '{{.Budget}}',
                             start: {{.Date}},
-                            color: "orange",
-                        },
-                    {{end}}
-                    {{range .incomes}}
-                        {
-                            title: '¥' + '{{.Value}}',
-                            start: {{.Date}},
-                            color: "green",
+                            {{if .IsOUTGO }}
+                                color: "orange",
+                            {{else}}
+                                color: "green",
+                            {{end}}
                         },
                     {{end}}
                 ],
@@ -55,13 +52,13 @@
                         // fix calendar content
 
                         var color = ""
-                        if (response['movement'] == 'expense') {
+                        if (response['budget_type'] == 'outgo') {
                             color = "orange" 
                         } else {
                             color = "green" 
                         }
                         $('#calendar').fullCalendar('addEventSource', [{
-                            title: '¥'+response['value'],
+                            title: '¥'+response['budget'],
                             start: response['date'],
                             allDay: true,
                             color: color
@@ -91,10 +88,10 @@
         <p>
         <input type="date" name="date" required/>
         </p>
-        <p><input type="number" name="value" required/> yen</p>
+        <p><input type="number" name="budget" required/> yen</p>
         <p>
-        <input type="radio" name="movement" value="expense" checked="checked"/>expense
-        <input type="radio" name="movement" value="incomes"/>incomes
+        <input type="radio" name="budget_type" value="outgo" checked="checked"/>outgo
+        <input type="radio" name="budget_type" value="income"/>income
         </p>
         <input type='submit' value='Submit'/>
         </form>

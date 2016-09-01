@@ -1,16 +1,20 @@
 version: '2'
 services:
     mysql:
-        image: mysql:5.7
+        build: ./mysql
         env_file:
-            - mysql.env
-#          environment:
-#              - MYSQL_ROOT_PASSWORD=test
-#              - MYSQL_PORT_3306_TCP_PORT=3306
-#              - MYSQL_DATABASE=cattleya
-        ports:
-            - "3306:3306"
-#          exports:
+            - ./mysql/mysql.env
+#          ports:
+        expose:
+            - "3306"
 
-#      cattleya:
-#          build: app/
+    cattleya:
+        build: ./app
+        env_file:
+            - ./app/app.env
+            - ./mysql/mysql.env
+        ports:
+            - "8080:8080"
+        links:
+            - mysql
+

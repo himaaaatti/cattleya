@@ -7,6 +7,9 @@ import (
 
 	"github.com/pkg/errors"
 
+//      _ "github.com/mattn/go-sqlite3"
+    _ "github.com/go-sql-driver/mysql"
+
     "./twitter"
 
 	"os"
@@ -15,7 +18,6 @@ import (
     "fmt"
 
     "database/sql"
-    _ "github.com/mattn/go-sqlite3"
 
 )
 
@@ -25,23 +27,12 @@ var (
     db *sql.DB
 )
 
-//  type Expense struct {
-//      ID int `id`
-//      Value int `value`
-//      Date string `date`
-//  }
-
-//  type Incomes struct {
-//      ID int 
-//      Value int
-//      Date
-//  }
-
 // expenses, incomes
 type MoneyInfo struct {
     ID int
-    Value int
+    Budget int
     Date string
+    IsOUTGO bool
 }
 
 func LoginByTwitter(c *gin.Context) {
@@ -192,16 +183,16 @@ func GetMe(at *oauth.Credentials, user interface{}) (int, error) {
 
 func main() {
 
-    key := os.Getenv("TEST_KEY")
-    secret := os.Getenv("TEST_SECRET")
+    key := os.Getenv("KEY")
+    secret := os.Getenv("SECRET")
 
     if (key == "")  || (secret == "") {
-        panic("you should set TEST_KEY and TEST_SECRET")
+        panic("you should set KEY and SECRET")
     }
 
     domain := os.Getenv("DOMAIN")
     if domain == "" {
-        panic("you should set DOMAIN env varibale")
+        panic("you should set DOMAIN env variable")
     }
 
     port := os.Getenv("PORT")
@@ -212,9 +203,32 @@ func main() {
     url := "http://" + domain + ":" + port + "/"
     callbackURL = url + "login/callback"
 
+    dbUser := "root"//os.Getenv("MYSQL_USER")
+    if dbUser == "" {
+        panic("you should set MYSQL_USER env variable")
+    }
+
+    dbPass := os.Getenv("MYSQL_PASSWORD")
+    if dbPass == "" {
+        panic("you should set MYSQL_PASSWORD env variable")
+    }
+
+    dbName := os.Getenv("MYSQL_DATABASE")
+    if dbName == "" {
+        panic("you should set MYSQL_DATABASE env variable")
+    }
+
+    dbHost := os.Getenv("MYSQL_HOST")
+    if dbHost == "" {
+        dbHost = "mysql"
+    }
+
     // for db
     var err error
-    db, err = sql.Open("sqlite3", "sample.db")
+//      db, err = sql.Open("sqlite3", "sample.db")
+    db, err = sql.Open("mysql", dbUser + ":" + dbPass + "@tcp(" + dbHost +":3306)/"+dbName)
+
+
     if err != nil {
         panic(err)
     }
@@ -222,8 +236,8 @@ func main() {
     // for twitter oauth
     twitterOauth = &twitter.Twitter{key, secret}
 
-    router := gin.New()
-    //      router := gin.Default()
+//      router := gin.New()
+    router := gin.Default()
 
     router.LoadHTMLGlob("templates/*")
 
@@ -253,42 +267,33 @@ func main() {
         }
 
         rows, err := db.Query(
-            `SELECT id, value, date from expenses WHERE user_id = ?`,
+            `SELECT id, budget, type, date from journal WHERE user_id = ?`,
             user_id)
         if err != nil {
             panic(err)
         }
 
 //          expenses := make([]MoneyInfo, 0, 10)
-        expenses := make([]MoneyInfo, 0)
+        journal := make([]MoneyInfo, 0)
         for rows.Next() {
             ex := MoneyInfo{}
-            err = rows.Scan(&ex.ID, &ex.Value, &ex.Date)
+            var btype string
+            err = rows.Scan(&ex.ID, &ex.Budget, &btype, &ex.Date)
             if err != nil {
                 panic(err)
             }
-            expenses = append(expenses, ex)
+
+            ex.IsOUTGO = btype == "OUTGO"
+
+            fmt.Println(ex)
+            journal = append(journal , ex)
         }
 
-        rows, err = db.Query(
-            `SELECT id, value, date from incomes WHERE user_id = ?`,
-            user_id)
-        if err != nil {
-            panic(err)
-        }
-        incomes := make([]MoneyInfo, 0)
-        for rows.Next() {
-            in := MoneyInfo{}
-            err = rows.Scan(&in.ID, &in.Value, &in.Date)
-            if err != nil {
-                panic(err)
-            }
-            incomes = append(incomes, in)
-        }
-        //TODO join できそう？
 
         // pass authorized
-        c.HTML(http.StatusOK, "main.tmpl", gin.H{"name": session.Get("name"), "expenses": expenses, "incomes": incomes})
+        c.HTML(http.StatusOK,
+            "main.tmpl",
+            gin.H{"name": session.Get("name"), "journal": journal })
     })
 
 //      router.GET("/input", func(c *gin.Context) {
@@ -363,37 +368,34 @@ func main() {
 
             //TODO
             fmt.Println(c.PostForm("date"))
-            //data, value, move
+
+            //data, budget, move
             date := c.PostForm("date")
-            value := c.PostForm("value")
+            budget := c.PostForm("budget")
 
-            movement := c.PostForm("movement")
+            btype := c.PostForm("budget_type")
 
-            if movement == "expense" {
-                _, err := db.Exec(`INSERT INTO expenses (user_id, value, date) VALUES (?, ?, ?)`, user_id, value, date)
-                if err != nil {
-                    panic(err)
-                }
-
-            } else if movement == "incomes" {
-                _, err := db.Exec(`INSERT INTO incomes(user_id, value, date) VALUES (?, ?, ?)`, user_id, value, date)
-                if err != nil {
-                    panic(err)
-                }
-
+            var query string
+            if btype == "outgo" {
+                query = `INSERT INTO journal(user_id, budget, type, date) VALUES (?, ?, 'OUTGO', ?)`
+            } else if btype == "income" {
+                query = `INSERT INTO journal(user_id, budget, type, date) VALUES (?, ?, 'INCOME', ?)`
             } else {
                 failedResponse()
                 return
             }
 
+            _, err := db.Exec(query, user_id, budget, date)
+            if err != nil {
+                panic(err)
+            }
 
             c.JSON(http.StatusOK,
                 gin.H{ "status": "ok",
-                "movement": movement,
+                "budget_type": btype,
                 "date": date,
-                "value": value,
+                "budget": budget,
                 })
-
         })
     }
 
