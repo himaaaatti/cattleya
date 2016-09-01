@@ -25,10 +25,23 @@ var (
     db *sql.DB
 )
 
-type Expense struct {
-    ID int `id`
-    Value int `value`
-    Date int `date`
+//  type Expense struct {
+//      ID int `id`
+//      Value int `value`
+//      Date string `date`
+//  }
+
+//  type Incomes struct {
+//      ID int 
+//      Value int
+//      Date
+//  }
+
+// expenses, incomes
+type MoneyInfo struct {
+    ID int
+    Value int
+    Date string
 }
 
 func LoginByTwitter(c *gin.Context) {
@@ -239,30 +252,17 @@ func main() {
             return
         }
 
-        // pass authorized
-        //TODO
-        c.HTML(http.StatusOK, "main.tmpl", gin.H{"name": session.Get("name")})
-    })
-
-    router.GET("/input", func(c *gin.Context) {
-        session := sessions.Default(c)
-        user_id := session.Get("user_id")
-        name := session.Get("name")
-        if name == "" {
-            c.Redirect(http.StatusMovedPermanently, "/")
-            return
-        }
-
         rows, err := db.Query(
-            `SELECT id, value, date from expenses WHERE user_id = ? LIMIT 10`,
+            `SELECT id, value, date from expenses WHERE user_id = ?`,
             user_id)
         if err != nil {
             panic(err)
         }
 
-        expenses := make([]Expense, 0, 10)
+//          expenses := make([]MoneyInfo, 0, 10)
+        expenses := make([]MoneyInfo, 0)
         for rows.Next() {
-            ex := Expense{}
+            ex := MoneyInfo{}
             err = rows.Scan(&ex.ID, &ex.Value, &ex.Date)
             if err != nil {
                 panic(err)
@@ -270,33 +270,132 @@ func main() {
             expenses = append(expenses, ex)
         }
 
-        rows.Close()
-
-        c.HTML(http.StatusOK, "input.tmpl",
-            gin.H{"name": name, "expenses": expenses})
-    })
-
-    router.POST("/input", func(c *gin.Context) {
-        session := sessions.Default(c)
-        name := session.Get("name")
-        user_id := session.Get("user_id")
-        if name == "" {
-            c.Redirect(http.StatusMovedPermanently, "/")
-            return
-        }
-
-        value := c.PostForm("value")
-        //TODO now 以外
-        _, err := db.Exec(
-            `INSERT INTO expenses (user_id, value, date) VALUES (?, ?, strftime('%s', 'now'))`,
-            user_id, value)
-
+        rows, err = db.Query(
+            `SELECT id, value, date from incomes WHERE user_id = ?`,
+            user_id)
         if err != nil {
             panic(err)
         }
+        incomes := make([]MoneyInfo, 0)
+        for rows.Next() {
+            in := MoneyInfo{}
+            err = rows.Scan(&in.ID, &in.Value, &in.Date)
+            if err != nil {
+                panic(err)
+            }
+            incomes = append(incomes, in)
+        }
+        //TODO join できそう？
 
-        c.Redirect(http.StatusMovedPermanently, "/input")
+        // pass authorized
+        c.HTML(http.StatusOK, "main.tmpl", gin.H{"name": session.Get("name"), "expenses": expenses, "incomes": incomes})
     })
+
+//      router.GET("/input", func(c *gin.Context) {
+//          session := sessions.Default(c)
+//          user_id := session.Get("user_id")
+//          name := session.Get("name")
+//          if name == "" {
+//              c.Redirect(http.StatusMovedPermanently, "/")
+//              return
+//          }
+
+//          rows, err := db.Query(
+//              `SELECT id, value, date from expenses WHERE user_id = ? LIMIT 10`,
+//              user_id)
+//          if err != nil {
+//              panic(err)
+//          }
+
+//          expenses := make([]Expense, 0, 10)
+//          for rows.Next() {
+//              ex := Expense{}
+//              err = rows.Scan(&ex.ID, &ex.Value, &ex.Date)
+//              if err != nil {
+//                  panic(err)
+//              }
+//              expenses = append(expenses, ex)
+//          }
+
+//          rows.Close()
+
+//          c.HTML(http.StatusOK, "input.tmpl",
+//              gin.H{"name": name, "expenses": expenses})
+//      })
+
+//      router.POST("/input", func(c *gin.Context) {
+//          session := sessions.Default(c)
+//          name := session.Get("name")
+//          user_id := session.Get("user_id")
+//          if name == "" {
+//              c.Redirect(http.StatusMovedPermanently, "/")
+//              return
+//          }
+
+//          value := c.PostForm("value")
+        //TODO now 以外
+//          _, err := db.Exec(
+//              `INSERT INTO expenses (user_id, value, date) VALUES (?, ?, strftime('%s', 'now'))`,
+//              user_id, value)
+
+//          if err != nil {
+//              panic(err)
+//          }
+
+//          c.Redirect(http.StatusMovedPermanently, "/input")
+//      })
+
+
+    json := router.Group("json")
+    {
+        json.POST("/submit", func(c *gin.Context) {
+            session := sessions.Default(c)
+            user_id := session.Get("user_id")
+
+            failedResponse := func() {c.JSON(400, gin.H{"status": "failed"})}
+            if user_id == nil {
+//                  panic(err)
+//                  c.JSON(400,
+//                      gin.H{ "status": "failed" })
+                failedResponse()
+                return
+            }
+
+            //TODO
+            fmt.Println(c.PostForm("date"))
+            //data, value, move
+            date := c.PostForm("date")
+            value := c.PostForm("value")
+
+            movement := c.PostForm("movement")
+
+            if movement == "expense" {
+                _, err := db.Exec(`INSERT INTO expenses (user_id, value, date) VALUES (?, ?, ?)`, user_id, value, date)
+                if err != nil {
+                    panic(err)
+                }
+
+            } else if movement == "incomes" {
+                _, err := db.Exec(`INSERT INTO incomes(user_id, value, date) VALUES (?, ?, ?)`, user_id, value, date)
+                if err != nil {
+                    panic(err)
+                }
+
+            } else {
+                failedResponse()
+                return
+            }
+
+
+            c.JSON(http.StatusOK,
+                gin.H{ "status": "ok",
+                "movement": movement,
+                "date": date,
+                "value": value,
+                })
+
+        })
+    }
 
     router.Run()
 }

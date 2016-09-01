@@ -10,23 +10,93 @@
     '></script>
 
         <script>
+        // for fullCalendar
         $(document).ready(function() {
             $('#calendar').fullCalendar({
 
+                dayClick: function(date, jsEvent, view, resourceObj) {
+                    alert('Date: ' + date.format());
+                },
+
+                events: [
+                    {{range .expenses}}
+                        {
+                            title: '¥' + '{{.Value}}',
+                            start: {{.Date}},
+                            color: "orange",
+                        },
+                    {{end}}
+                    {{range .incomes}}
+                        {
+                            title: '¥' + '{{.Value}}',
+                            start: {{.Date}},
+                            color: "green",
+                        },
+                    {{end}}
+                ],
+
             })
         });
-        </script>
 
+        // for submit 
+        $(function() {
+            $('#form').submit(function(event) {
+                var form = $(this)
+                event.preventDefault();
+                $.ajax({
+                    url: form.attr('action'),
+                    type: form.attr('method'),
+                    data: form.serialize(),
+                    success: function(response) {
+                        //alert(response['status'])
+                        if(response['status'] != 'ok'){
+                            return 
+                        }
+                        // fix calendar content
+
+                        var color = ""
+                        if (response['movement'] == 'expense') {
+                            color = "orange" 
+                        } else {
+                            color = "green" 
+                        }
+                        $('#calendar').fullCalendar('addEventSource', [{
+                            title: '¥'+response['value'],
+                            start: response['date'],
+                            allDay: true,
+                            color: color
+                            }]
+                        );
+                    },
+                    error: function(xhr) {
+                        alert(xhr.responseText)
+                    }
+                });
+                return false;
+            });
+        });
+        </script>
     
     </head>
     <body>
-        <a>{{ .name }}</a>
+        <a>Hello {{ .name }}</a>
         <a href="/logout">logout</a>
         <br>
 
-        <a href="/input"> Input </a>
+       <!--  <a href="/input"> Input </a> -->
 
         <div id='calendar'></div>
 
+        <form id="form" action="/json/submit" method="POST">
+        <p>
+        <input type="date" name="date" required/>
+        </p>
+        <p><input type="number" name="value" required/> yen</p>
+        <p>
+        <input type="radio" name="movement" value="expense" checked="checked"/>expense
+        <input type="radio" name="movement" value="incomes"/>incomes
+        </p>
+        <input type='submit' value='Submit'/>
+        </form>
     </body>
 </html>
