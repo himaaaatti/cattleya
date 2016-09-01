@@ -1,4 +1,4 @@
-package main
+package cattleya
 
 import (
     "github.com/garyburd/go-oauth/oauth"
@@ -9,8 +9,6 @@ import (
 
 //      _ "github.com/mattn/go-sqlite3"
     _ "github.com/go-sql-driver/mysql"
-
-    "./twitter"
 
 	"os"
 	"net/http"
@@ -23,7 +21,7 @@ import (
 
 var (
     callbackURL string
-    twitterOauth *twitter.Twitter
+    twitterOauth *Twitter
     db *sql.DB
 )
 
@@ -234,7 +232,7 @@ func main() {
     }
 
     // for twitter oauth
-    twitterOauth = &twitter.Twitter{key, secret}
+    twitterOauth = &Twitter{key, secret}
 
 //      router := gin.New()
     router := gin.Default()

@@ -1,4 +1,4 @@
-package twitter
+package cattleya
 
 import (
     "github.com/garyburd/go-oauth/oauth"
@@ -9,11 +9,6 @@ const (
 	authorizationURL = "https://api.twitter.com/oauth/authenticate"
 	accessTokenURL   = "https://api.twitter.com/oauth/access_token"
 	accountURL       = "https://api.twitter.com/1.1/account/verify_credentials.json"
-)
-
-var (
-    domain int
-    callbackURL string
 )
 
 type Twitter struct {
