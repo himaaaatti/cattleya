@@ -4,17 +4,23 @@ services:
         build: ./mysql
         env_file:
             - ./mysql/mysql.env
-#          ports:
         expose:
             - "3306"
+    redis:
+        image:  redis:3.0
+        expose:
+            - "6379"
 
     cattleya:
         build: ./app
         env_file:
             - ./app/app.env
             - ./mysql/mysql.env
+        environment:
+            - REDIS_PORT=6379
         ports:
             - "8080:8080"
         links:
             - mysql
+            - redis
 

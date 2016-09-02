@@ -43,6 +43,7 @@ kill:
 .SUFFIXES: develop
 develop:
 	(cd mysql; docker build ./ -t mysql:cattleya; docker run -d -p"3306:3306" --env-file=mysql.env mysql:cattleya)
+	docker run -d -p"6379:6379" redis:3.0
 
 .SUFFIXES: clean
 clean:

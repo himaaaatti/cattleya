@@ -221,11 +221,21 @@ func main() {
         dbHost = "mysql"
     }
 
+    redisPort := os.Getenv("REDIS_PORT")
+    if redisPort == "" {
+        redisPort = "6379"
+    }
+
+    redisHost := os.Getenv("REDIS_HOST")
+    if redisHost == "" {
+        redisHost = "redis"
+    }
+
+
     // for db
     var err error
 //      db, err = sql.Open("sqlite3", "sample.db")
     db, err = sql.Open("mysql", dbUser + ":" + dbPass + "@tcp(" + dbHost +":3306)/"+dbName)
-
 
     if err != nil {
         panic(err)
@@ -239,7 +249,11 @@ func main() {
 
     router.LoadHTMLGlob("templates/*")
 
-    store := sessions.NewCookieStore([]byte("secret"))
+//      store := sessions.NewCookieStore([]byte("secret"))
+    store, err := sessions.NewRedisStore(10, "tcp", redisHost + ":" + redisPort, "", []byte("pompomprin") )
+    if err != nil {
+        panic(err)
+    }
     router.Use(sessions.Sessions("mysession", store))
 
     router.Use(gin.Logger())
