@@ -5,6 +5,7 @@ cattleya is simple home budget manager
 ###need tools
 - docker
 - docker-compose
+- go
 
 ### how to run
 1.  $ make env
