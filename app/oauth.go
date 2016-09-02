@@ -1,4 +1,4 @@
-package cattleya
+package main
 
 import (
     "github.com/garyburd/go-oauth/oauth"

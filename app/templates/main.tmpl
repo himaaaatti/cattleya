@@ -8,6 +8,15 @@
     <script src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.14.1/moment.min.js'></script>
     <script src='http://cdnjs.cloudflare.com/ajax/libs/fullcalendar/2.9.1/fullcalendar.min.js
     '></script>
+    
+    <!-- for twitter bootstrap-->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+<!-- Optional theme -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+
+<!-- Latest compiled and minified JavaScript -->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 
         <script>
         // for fullCalendar
@@ -18,9 +27,19 @@
                     alert('Date: ' + date.format());
                 },
 
+				eventClick: function(calEvent, jsEvent, view) {
+                    console.log(calEvent.title);
+                    console.log(calEvent.id);
+                    document.getElementById('modal_title').innerHTML=calEvent.title;
+                    document.getElementById('hidden_id').value = calEvent.id
+                    $('#form-modal').modal();
+                },
+
                 events: [
+                /*
                     {{range .journal}}
                         {
+                            id: {{.ID}},
                             title: '¥' + '{{.Budget}}',
                             start: {{.Date}},
                             {{if .IsOUTGO }}
@@ -30,52 +49,140 @@
                             {{end}}
                         },
                     {{end}}
+                    */
                 ],
 
             })
         });
 
+        // onload
+        function getBudget() {
+            $.ajax({
+                type: 'GET',
+                url: '/json/budget'
+            }).done(function(result){
+                if(result["status"] != "ok") {
+                    console.log("failed onload")
+                    return
+                }
+                addBudget(result["list"])
+            }) .fail(function(result) {
+                console.log(result)
+            });
+        };
+
+        var budget_info = {}
+        function addBudget(budgets) {
+            console.log(budgets)
+            for(i in budgets)  {
+                var bobj = budgets[i]
+                var binfo = bobj["binfo"]
+                budget_info[bobj["id"]] = binfo
+                console.log(bobj["binfo"])
+
+                var color = ""
+                if(binfo['btype'] == 'OUTGO')  {
+                    color = "orange";
+                } else {
+                    color = "green";
+                }
+
+                $('#calendar').fullCalendar('addEventSource', [{
+                    id: bobj["id"],
+                    title: '¥'+ binfo['budget'],
+                    start: binfo['date'],
+                    allDay: true,
+                    color: color
+                    }]
+                );
+
+            }
+        }
+
+        if(window.addEventListener) {
+            window.addEventListener('load', getBudget, false)
+        }
+
+        function call_and_set(form) {
+            $.ajax({
+                url: form.attr('action'),
+                type: form.attr('method'),
+                data: form.serialize(),
+                success: function(response) {
+                    //alert(response['status'])
+                    if(response['status'] != 'ok'){
+                        return 
+                    }
+                    // fix calendar content
+                    //return
+
+                    var color = ""
+                    if (response['budget_type'] == 'outgo') {
+                        color = "orange" 
+                    } else {
+                        color = "green" 
+                    }
+                    $('#calendar').fullCalendar('addEventSource', [{
+                        title: '¥'+response['budget'],
+                        start: response['date'],
+                        allDay: true,
+                        color: color
+                        }]);
+                },
+                error: function(xhr) {
+                       alert(xhr.responseText)
+               }
+            });
+
+        }
+              
         // for submit 
         $(function() {
             $('#form').submit(function(event) {
                 var form = $(this)
                 event.preventDefault();
-                $.ajax({
-                    url: form.attr('action'),
-                    type: form.attr('method'),
-                    data: form.serialize(),
-                    success: function(response) {
-                        //alert(response['status'])
-                        if(response['status'] != 'ok'){
-                            return 
-                        }
-                        // fix calendar content
-
-                        var color = ""
-                        if (response['budget_type'] == 'outgo') {
-                            color = "orange" 
-                        } else {
-                            color = "green" 
-                        }
-                        $('#calendar').fullCalendar('addEventSource', [{
-                            title: '¥'+response['budget'],
-                            start: response['date'],
-                            allDay: true,
-                            color: color
-                            }]
-                        );
-                    },
-                    error: function(xhr) {
-                        alert(xhr.responseText)
-                    }
-                });
+                call_and_set(form);
                 return false;
             });
         });
+
+        // for delete and submit
+        $(function() {
+                $('#modal-form').submit(function(event) {
+                        var form = $(this);
+                        event.preventDefault();
+                        var id = document.getElementById('hidden_id').value
+                        console.log(id)
+                        $('#calendar').fullCalendar('removeEvents', id)
+                        call_and_set(form)
+                        return false;
+                })});
         </script>
     
     </head>
     <body>
+    <nav class="navbar navbar-inverse">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="/">Cattleya</a>
+        </div>
+        <div id="navbar" class="collapse navbar-collapse">
+          <ul class="nav navbar-nav">
+            <li class="active"><a href="/">Home</a></li>
+            <li><a href="/">About</a></li>
+            <li><a href="/">Contact</a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+
+
         <a>Hello {{ .name }}</a>
         <a href="/logout">logout</a>
         <br>
@@ -95,5 +202,37 @@
         </p>
         <input type='submit' value='Submit'/>
         </form>
+
+		<!-- Modal -->
+		<div class="modal fade" id="form-modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+		  <div class="modal-dialog" role="document">
+			<div class="modal-content">
+			  <div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+				<h4 class="modal-title" id="modal_title"></h4>
+			  </div>
+			  <div class="modal-body">
+              <form id="modal-form" action="/json/budget" method="POST">
+            <input type="date" name="date" required/>
+        </p>
+        <p><input type="number" name="budget" required/> yen</p>
+        <p>
+        <input type="radio" name="budget_type" value="outgo" checked="checked"/>outgo
+        <input type="radio" name="budget_type" value="income"/>income
+        </p>
+        <input id="hidden_id" type="hidden" name="id" value="-1">
+        <input type='submit' value='Submit'/> 
+        </form>
+			  </div>
+              <!--
+			  <div class="modal-footer">
+				<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+				<button type="button" class="btn btn-primary">Save changes</button>
+			  </div>
+              -->
+			</div>
+		  </div>
+		</div>
+
     </body>
 </html>

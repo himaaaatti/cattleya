@@ -1,4 +1,4 @@
-package cattleya
+package main
 
 import (
     "github.com/garyburd/go-oauth/oauth"
@@ -27,10 +27,10 @@ var (
 
 // expenses, incomes
 type MoneyInfo struct {
-    ID int
-    Budget int
-    Date string
-    IsOUTGO bool
+    ID int `json:"id"`
+    Budget int `json:budget`
+    Date string `json:data`
+    IsOUTGO bool `json:is_outgo`
 }
 
 func LoginByTwitter(c *gin.Context) {
@@ -264,103 +264,130 @@ func main() {
             return
         }
 
-        rows, err := db.Query(
-            `SELECT id, budget, type, date from journal WHERE user_id = ?`,
-            user_id)
-        if err != nil {
-            panic(err)
-        }
-
-//          expenses := make([]MoneyInfo, 0, 10)
-        journal := make([]MoneyInfo, 0)
-        for rows.Next() {
-            ex := MoneyInfo{}
-            var btype string
-            err = rows.Scan(&ex.ID, &ex.Budget, &btype, &ex.Date)
-            if err != nil {
-                panic(err)
-            }
-
-            ex.IsOUTGO = btype == "OUTGO"
-
-            fmt.Println(ex)
-            journal = append(journal , ex)
-        }
-
-
-        // pass authorized
-        c.HTML(http.StatusOK,
-            "main.tmpl",
-            gin.H{"name": session.Get("name"), "journal": journal })
-    })
-
-//      router.GET("/input", func(c *gin.Context) {
-//          session := sessions.Default(c)
-//          user_id := session.Get("user_id")
-//          name := session.Get("name")
-//          if name == "" {
-//              c.Redirect(http.StatusMovedPermanently, "/")
-//              return
-//          }
-
 //          rows, err := db.Query(
-//              `SELECT id, value, date from expenses WHERE user_id = ? LIMIT 10`,
+//              `SELECT id, budget, type, date from journal WHERE user_id = ?`,
 //              user_id)
 //          if err != nil {
 //              panic(err)
 //          }
 
-//          expenses := make([]Expense, 0, 10)
+//          journal := make([]MoneyInfo, 0)
 //          for rows.Next() {
-//              ex := Expense{}
-//              err = rows.Scan(&ex.ID, &ex.Value, &ex.Date)
+//              ex := MoneyInfo{}
+//              var btype string
+//              err = rows.Scan(&ex.ID, &ex.Budget, &btype, &ex.Date)
 //              if err != nil {
 //                  panic(err)
 //              }
-//              expenses = append(expenses, ex)
+
+//              ex.IsOUTGO = btype == "OUTGO"
+
+//              fmt.Println(ex)
+//              journal = append(journal , ex)
 //          }
 
-//          rows.Close()
 
-//          c.HTML(http.StatusOK, "input.tmpl",
-//              gin.H{"name": name, "expenses": expenses})
-//      })
+        // pass authorized
+//          c.HTML(http.StatusOK,
+//              "main.tmpl",
+//              gin.H{"name": session.Get("name"), "journal": journal})
+            c.HTML(http.StatusOK, "main.tmpl", gin.H{"name": session.Get("name")})
+    })
 
-//      router.POST("/input", func(c *gin.Context) {
-//          session := sessions.Default(c)
-//          name := session.Get("name")
-//          user_id := session.Get("user_id")
-//          if name == "" {
-//              c.Redirect(http.StatusMovedPermanently, "/")
-//              return
-//          }
-
-//          value := c.PostForm("value")
-        //TODO now 以外
-//          _, err := db.Exec(
-//              `INSERT INTO expenses (user_id, value, date) VALUES (?, ?, strftime('%s', 'now'))`,
-//              user_id, value)
-
-//          if err != nil {
-//              panic(err)
-//          }
-
-//          c.Redirect(http.StatusMovedPermanently, "/input")
-//      })
-
-
-    json := router.Group("json")
+    failedResponse := func(c *gin.Context) {c.JSON(400, gin.H{"status": "failed"})}
+    json_api := router.Group("json")
     {
-        json.POST("/submit", func(c *gin.Context) {
+        json_api.GET("/budget", func(c *gin.Context) {
             session := sessions.Default(c)
             user_id := session.Get("user_id")
 
-            failedResponse := func() {c.JSON(400, gin.H{"status": "failed"})}
+            rows, err := db.Query(
+                `SELECT id, budget, type, date from journal WHERE user_id = ?`,
+                user_id)
+            if err != nil {
+                failedResponse(c)
+                panic(err)
+            }
+
+            type budgetInfo struct {
+                Budget string `json:"budget"`
+                Btype string `json:"btype"`
+                Date string `json:"date"`
+            }
+            type journalJson struct {
+                Id int `json:"id"`
+                Binfo budgetInfo `json:"binfo"`
+            }
+            type budgetList struct {
+                Status string `json:"status"`
+                List []journalJson `json:"list"`
+            }
+
+            journal := make([]journalJson, 0)
+            for rows.Next() {
+                ex := journalJson{}
+                err = rows.Scan(&ex.Id, &ex.Binfo.Budget,
+                    &ex.Binfo.Btype, &ex.Binfo.Date)
+                if err != nil {
+                    panic(err)
+                }
+
+//                  fmt.Println(ex)
+                journal = append(journal , ex)
+            }
+
+            blist := budgetList{"ok", journal}
+
+            // {"status": "ok", {"0": {budget, btype, exdata}}}
+            c.JSON(http.StatusOK, blist)
+        })
+
+        json_api.POST("/budget", func(c *gin.Context) {
+            session := sessions.Default(c)
+            user_id := session.Get("user_id")
+
             if user_id == nil {
-//                  panic(err)
-//                  c.JSON(400,
-//                      gin.H{ "status": "failed" })
-                failedResponse()
+                failedResponse(c)
+                return
+            }
+
+            //TODO 
+            id := c.PostForm("id")
+            date := c.PostForm("date")
+            budget := c.PostForm("budget")
+            btype := c.PostForm("budget_type")
+
+            var query string
+            if btype == "outgo" {
+                query = `UPDATE journal SET budget=?, type="OUTGO", date=? WHERE id=?`
+            } else if btype == "income" {
+                query = `UPDATE journal SET budget=?, type="INCOME", date=? WHERE id=?`
+            } else {
+                failedResponse(c)
+                return
+            }
+
+            _, err := db.Exec(query, budget, date, id)
+            if err != nil {
+                failedResponse(c)
+                panic(err)
+            }
+
+            c.JSON(http.StatusOK,
+                gin.H{ "status": "ok",
+                "id": id,
+                "budget_type": btype,
+                "date": date,
+                "budget": budget,
+                })
+        })
+
+        json_api.POST("/submit", func(c *gin.Context) {
+            session := sessions.Default(c)
+            user_id := session.Get("user_id")
+
+            if user_id == nil {
+                failedResponse(c)
                 return
             }
 
@@ -373,23 +400,42 @@ func main() {
 
             btype := c.PostForm("budget_type")
 
-            var query string
+            query := `START TRANSACTION`
+            _, err := db.Exec(query)
+            if err != nil {
+                panic(err)
+            }
+
             if btype == "outgo" {
                 query = `INSERT INTO journal(user_id, budget, type, date) VALUES (?, ?, 'OUTGO', ?)`
             } else if btype == "income" {
                 query = `INSERT INTO journal(user_id, budget, type, date) VALUES (?, ?, 'INCOME', ?)`
             } else {
-                failedResponse()
+                failedResponse(c)
                 return
             }
 
-            _, err := db.Exec(query, user_id, budget, date)
+            _, err = db.Exec(query, user_id, budget, date)
+            if err != nil {
+                panic(err)
+            }
+
+            row := db.QueryRow(`SELECT LAST_INSERT_ID()`)
+            var id int
+            err = row.Scan(&id)
+            if err != nil {
+                panic(err)
+            }
+
+            query = `COMMIT`
+            _, err = db.Exec(query)
             if err != nil {
                 panic(err)
             }
 
             c.JSON(http.StatusOK,
                 gin.H{ "status": "ok",
+                "id": id,
                 "budget_type": btype,
                 "date": date,
                 "budget": budget,
@@ -399,4 +445,3 @@ func main() {
 
     router.Run()
 }
-
